@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distribution Calculator — Z, t, Chi-square, F</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23185fa5'/%3E%3Cpath d='M8 44 Q20 44 24 20 Q28 44 32 44 Q36 44 40 12 Q44 44 56 44' stroke='white' stroke-width='4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jstat/1.9.4/jstat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #f5f5f3;
+    color: #1a1a1a;
+    margin: 0;
+    padding: 24px 16px 60px;
+  }
+  .container {
+    max-width: 640px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  p.subtitle {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 24px;
+  }
+  .row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .field {
+    flex: 1;
+    min-width: 140px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  select, input[type="number"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d6d6d3;
+    border-radius: 8px;
+    font-size: 15px;
+    background: #fff;
+    color: #1a1a1a;
+  }
+  select:focus, input:focus {
+    outline: none;
+    border-color: #378add;
+    box-shadow: 0 0 0 3px rgba(55,138,221,0.15);
+  }
+  .error {
+    color: #c0392b;
+    font-size: 13px;
+    margin-bottom: 12px;
+    display: none;
+  }
+  .results {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .card {
+    background: #f0f4f8;
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .card p.label {
+    font-size: 13px;
+    color: #555;
+    margin: 0 0 6px;
+  }
+  .card p.value {
+    font-size: 26px;
+    font-weight: 600;
+    margin: 0;
+    color: #185fa5;
+  }
+  .chart-wrap {
+    position: relative;
+    width: 100%;
+    height: 280px;
+    margin-top: 8px;
+  }
+  .footnote {
+    font-size: 12px;
+    color: #888;
+    margin-top: 20px;
+    line-height: 1.6;
+  }
+  @media (max-width: 420px) {
+    .results { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Distribution calculator</h1>
+  <p class="subtitle">Critical values, p-values, and curve plots for Z, t, Chi-square, and F distributions.</p>
+
+  <div class="row">
+    <div class="field">
+      <label for="dist">Distribution</label>
+      <select id="dist">
+        <option value="z">Z (normal)</option>
+        <option value="t">t (Student's)</option>
+        <option value="chisq">Chi-square</option>
+        <option value="f">F</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="tail">Tail type</label>
+      <select id="tail">
+        <option value="right">Right-tailed</option>
+        <option value="left">Left-tailed</option>
+        <option value="two">Two-tailed</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row" id="dfRow">
+    <div class="field">
+      <label id="df1Label" for="df1">df</label>
+      <input type="number" id="df1" value="10" min="1" step="1">
+    </div>
+    <div class="field" id="df2Wrap" style="display:none;">
+      <label for="df2">df2</label>
+      <input type="number" id="df2" value="10" min="1" step="1">
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="alpha">Alpha (for critical value)</label>
+      <input type="number" id="alpha" value="0.05" min="0.0001" max="0.5" step="0.01">
+    </div>
+    <div class="field">
+      <label for="xval">x (for p-value)</label>
+      <input type="number" id="xval" value="2" step="0.1">
+    </div>
+  </div>
+
+  <div class="error" id="errorMsg"></div>
+
+  <div class="results">
+    <div class="card">
+      <p class="label">Critical value</p>
+      <p class="value" id="critOut">-</p>
+    </div>
+    <div class="card">
+      <p class="label">p-value at x</p>
+      <p class="value" id="pOut">-</p>
+    </div>
+  </div>
+
+  <div class="chart-wrap">
+    <canvas id="chart" role="img" aria-label="Probability density curve of the selected distribution with shaded critical region"></canvas>
+  </div>
+
+  <p class="footnote">
+    Shaded region shows the rejection area for the chosen tail and alpha. Works offline once loaded, except for the two CDN scripts (jStat, Chart.js) required on first load.
+  </p>
+</div>
+
+<script>
+const distEl = document.getElementById('dist');
+const tailEl = document.getElementById('tail');
+const df1El = document.getElementById('df1');
+const df2El = document.getElementById('df2');
+const df2Wrap = document.getElementById('df2Wrap');
+const dfRow = document.getElementById('dfRow');
+const df1Label = document.getElementById('df1Label');
+const alphaEl = document.getElementById('alpha');
+const xvalEl = document.getElementById('xval');
+const critOut = document.getElementById('critOut');
+const pOut = document.getElementById('pOut');
+const errorMsg = document.getElementById('errorMsg');
+let chart = null;
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.style.display = msg ? 'block' : 'none';
+}
+
+function getDistFns(name, df1, df2) {
+  if (name === 'z') return { pdf: x => jStat.normal.pdf(x,0,1), cdf: x => jStat.normal.cdf(x,0,1), inv: p => jStat.normal.inv(p,0,1), range: [-4,4] };
+  if (name === 't') return { pdf: x => jStat.studentt.pdf(x,df1), cdf: x => jStat.studentt.cdf(x,df1), inv: p => jStat.studentt.inv(p,df1), range: [-4,4] };
+  if (name === 'chisq') return { pdf: x => jStat.chisquare.pdf(x,df1), cdf: x => jStat.chisquare.cdf(x,df1), inv: p => jStat.chisquare.inv(p,df1), range: [0, Math.max(df1*3,10)] };
+  if (name === 'f') return { pdf: x => jStat.centralF.pdf(x,df1,df2), cdf: x => jStat.centralF.cdf(x,df1,df2), inv: p => jStat.centralF.inv(p,df1,df2), range: [0, 6] };
+}
+
+function update() {
+  showError('');
+  const name = distEl.value;
+  const tail = tailEl.value;
+  const df1 = parseFloat(df1El.value);
+  const df2 = parseFloat(df2El.value);
+  const alpha = parseFloat(alphaEl.value);
+  const x = parseFloat(xvalEl.value);
+
+  df2Wrap.style.display = name === 'f' ? 'block' : 'none';
+  dfRow.style.display = name === 'z' ? 'none' : 'flex';
+  df1Label.textContent = name === 'f' ? 'df1' : 'df';
+
+  if (name !== 'z' && !(df1 > 0)) { showError('Enter a valid df (greater than 0).'); return; }
+  if (name === 'f' && !(df2 > 0)) { showError('Enter a valid df2 (greater than 0).'); return; }
+  if (!(alpha > 0 && alpha < 1)) { showError('Alpha must be between 0 and 1.'); return; }
+  if (isNaN(x)) { showError('Enter a valid x value.'); return; }
+
+  const fns = getDistFns(name, df1, df2);
+
+  let crit;
+  if (tail === 'right') crit = fns.inv(1 - alpha);
+  else if (tail === 'left') crit = fns.inv(alpha);
+  else crit = fns.inv(1 - alpha / 2);
+  critOut.textContent = Math.round(crit * 1000) / 1000;
+
+  let p;
+  if (tail === 'right') p = 1 - fns.cdf(x);
+  else if (tail === 'left') p = fns.cdf(x);
+  else p = 2 * Math.min(fns.cdf(x), 1 - fns.cdf(x));
+  pOut.textContent = Math.round(p * 10000) / 10000;
+
+  const [lo, hi] = fns.range;
+  const n = 140;
+  const labels = [];
+  const data = [];
+  const shaded = [];
+  const critLow = tail === 'two' ? fns.inv(alpha / 2) : null;
+  for (let i = 0; i <= n; i++) {
+    const xi = lo + (hi - lo) * i / n;
+    labels.push(Math.round(xi * 100) / 100);
+    const yi = fns.pdf(xi);
+    data.push(yi);
+    let inRegion = false;
+    if (tail === 'right') inRegion = xi >= crit;
+    else if (tail === 'left') inRegion = xi <= crit;
+    else inRegion = (xi <= critLow) || (xi >= crit);
+    shaded.push(inRegion ? yi : null);
+  }
+
+  const ctx = document.getElementById('chart');
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Density', data, borderColor: '#378add', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.15 },
+        { label: 'Rejection region', data: shaded, borderColor: 'transparent', backgroundColor: 'rgba(216,90,48,0.35)', pointRadius: 0, fill: 'origin', tension: 0.15 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 12 } } } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 8, color: '#888' }, grid: { display: false } },
+        y: { ticks: { display: false }, grid: { color: '#eee' } }
+      }
+    }
+  });
+}
+
+[distEl, tailEl, df1El, df2El, alphaEl, xvalEl].forEach(el => {
+  el.addEventListener('input', update);
+  el.addEventListener('change', update);
+});
+update();
+</script>
+</body>
+</html>
